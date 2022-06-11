@@ -22,7 +22,7 @@ impl Step {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StepResult {
-    status: u16,
+    status: Option<u16>,
 }
 
 pub struct Executer {
@@ -48,10 +48,10 @@ impl Executer {
             Method::from_str(step.method.clone().as_str()).unwrap(),
             step.url.clone(),
         );
-        let resp = self.client.execute(req).await.unwrap();
+        let resp = self.client.execute(req).await;
 
         StepResult {
-            status: resp.status().as_u16(),
+            status: resp.map_or(None, |r| Some(r.status().as_u16())),
         }
     }
 }
@@ -82,7 +82,7 @@ mod tests {
             ))
             .await;
 
-        assert_eq!(actual.status, 200);
+        assert_eq!(actual.status, Some(200));
     }
 
     #[tokio::test]
@@ -114,7 +114,7 @@ mod tests {
         let results = subject.execute_steps(steps);
         futures::pin_mut!(results);
         while let Some(result) = results.next().await {
-            assert_eq!(result.status, 200);
+            assert_eq!(result.status, Some(200));
         }
     }
 }

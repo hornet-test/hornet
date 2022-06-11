@@ -1,12 +1,25 @@
 use async_stream::stream;
-use tokio::time::Instant;
+use futures::{pin_mut, StreamExt};
 use std::{str::FromStr, time::Duration};
+use tokio::time::Instant;
 
 use futures::Stream;
 use reqwest::{Method, Request, Url};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
+pub struct Scenario {
+    duration: Duration,
+    steps: Vec<Step>,
+}
+
+impl Scenario {
+    pub fn new(duration: Duration, steps: Vec<Step>) -> Self {
+        Self { duration, steps }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Step {
     url: Url,
     method: String,
@@ -36,7 +49,26 @@ impl Executer {
         Executer { client }
     }
 
-    pub fn execute_steps(&self, steps: Vec<Step>) -> impl Stream<Item = StepResult> + Send + '_ {
+    pub fn execute_scenario(
+        &self,
+        scenario: Scenario,
+    ) -> impl Stream<Item = StepResult> + Send + '_ {
+        let begin = Instant::now();
+        stream! {
+            loop {
+                if begin.elapsed() > scenario.duration {
+                    break;
+                }
+                let results = Self::execute_steps(self, scenario.steps.clone());
+                pin_mut!(results);
+                while let Some(result) = results.next().await {
+                    yield result;
+                }
+            }
+        }
+    }
+
+    fn execute_steps(&self, steps: Vec<Step>) -> impl Stream<Item = StepResult> + Send + '_ {
         stream! {
             for step in steps {
                 let result = Self::execute_step(self, step).await;

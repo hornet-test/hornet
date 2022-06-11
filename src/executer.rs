@@ -1,5 +1,6 @@
 use async_stream::stream;
-use std::str::FromStr;
+use tokio::time::Instant;
+use std::{str::FromStr, time::Duration};
 
 use futures::Stream;
 use reqwest::{Method, Request, Url};
@@ -23,6 +24,7 @@ impl Step {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StepResult {
     status: Option<u16>,
+    duration: Duration,
 }
 
 pub struct Executer {
@@ -48,10 +50,13 @@ impl Executer {
             Method::from_str(step.method.clone().as_str()).unwrap(),
             step.url.clone(),
         );
+        let begin = Instant::now();
         let resp = self.client.execute(req).await;
+        let duration = begin.elapsed();
 
         StepResult {
             status: resp.map_or(None, |r| Some(r.status().as_u16())),
+            duration,
         }
     }
 }
